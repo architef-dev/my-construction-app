@@ -429,8 +429,18 @@ const S={user:null,proj:null,uploadType:null,pendingRows:null,
 // ─── persistence ────────────────────────────────────────────────────────────
 function saveLS(){
   localStorage.setItem('pdb9',JSON.stringify({users:S.users,projects:S.projects}));
-  fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'saveProjects',projects:S.projects})}).catch(()=>{});
-  fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'saveUsers',users:S.users})}).catch(()=>{});
+  fetch(SCRIPT_URL,{
+    method:'POST',
+    mode:'cors',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({action:'saveProjects',projects:S.projects})
+  }).catch(e=>console.error('saveProjects failed:',e));
+  fetch(SCRIPT_URL,{
+    method:'POST',
+    mode:'cors',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({action:'saveUsers',users:S.users})
+  }).catch(e=>console.error('saveUsers failed:',e));
 }
 function mergeDefaults(){
   DEF_PROJECTS.forEach(def=>{
@@ -458,15 +468,31 @@ function loadLS(){
 }
 async function loadFromSheets(){
   try{
-    const res=await fetch(SCRIPT_URL+'?action=getAll');
+    console.log('[Sheets] מתחיל טעינת נתונים מ-Google Sheets...');
+    const res=await fetch(SCRIPT_URL+'?action=getAll',{
+      method:'GET',
+      mode:'cors'
+    });
+    if(!res.ok){
+      console.error('[Sheets] שגיאת HTTP:',res.status,res.statusText);
+      return false;
+    }
     const data=await res.json();
+    console.log('[Sheets] נתונים התקבלו:',data);
     if(data.success){
-      if(data.projects?.length)S.projects=data.projects;
-      if(data.users?.length)S.users=data.users;
+      if(data.projects?.length){S.projects=data.projects;console.log('[Sheets] נטענו',data.projects.length,'פרויקטים');}
+      if(data.users?.length){S.users=data.users;console.log('[Sheets] נטענו',data.users.length,'משתמשים');}
       mergeDefaults();
       localStorage.setItem('pdb9',JSON.stringify({users:S.users,projects:S.projects}));
+      return true;
+    }else{
+      console.warn('[Sheets] הסקריפט החזיר success:false',data);
+      return false;
     }
-  }catch(e){}
+  }catch(e){
+    console.error('[Sheets] שגיאה בטעינת נתונים — בדוק שה-Apps Script מפורסם כ-Web App עם הרשאות Anyone:',e);
+    return false;
+  }
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -570,8 +596,14 @@ function doLogout(){
 }
 async function manualSync(){
   const btn=document.getElementById('btnSync');btn.textContent='⏳...';btn.disabled=true;
-  try{await loadFromSheets();if(S.proj){S.proj=S.projects.find(x=>x.id===S.proj.id)||S.proj;renderDetail();}renderHome();btn.textContent='✓';btn.style.background='#eaf3de';btn.style.color='#2e6b0a';}
-  catch(e){btn.textContent='⚠️';}
+  const ok=await loadFromSheets();
+  if(ok){
+    if(S.proj){S.proj=S.projects.find(x=>x.id===S.proj.id)||S.proj;renderDetail();}
+    renderHome();btn.textContent='✓';btn.style.background='#eaf3de';btn.style.color='#2e6b0a';
+  }else{
+    console.error('[ManualSync] כישלון — בדוק console לפרטים');
+    btn.textContent='⚠️';
+  }
   setTimeout(()=>{btn.textContent='🔄 רענן';btn.disabled=false;btn.style.background='';btn.style.color='';},2500);
 }
 function saveCurrentProj(){
@@ -1592,7 +1624,11 @@ function startAutoSync(){
   syncTimer=setInterval(async()=>{
     if(!S.user)return; // not logged in — skip
     try{
-      const res=await fetch(SCRIPT_URL+'?action=getAll');
+      const res=await fetch(SCRIPT_URL+'?action=getAll',{
+        method:'GET',
+        mode:'cors'
+      });
+      if(!res.ok){console.warn('[AutoSync] HTTP error:',res.status);updateSyncIndicator(false);return;}
       const data=await res.json();
       if(!data.success)return;
 
@@ -1627,6 +1663,7 @@ function startAutoSync(){
         if(activeSumTab==='summary')renderSummaryTable();
       }
     }catch(e){
+      console.error('[AutoSync] שגיאה:',e);
       updateSyncIndicator(false);
     }
   },SYNC_INTERVAL);
@@ -1657,21 +1694,15 @@ function updateSyncIndicator(ok){
 loadLS();
 async function init(){
   document.getElementById('loginScreen').style.display='flex';
-  try{
-    const res=await fetch(SCRIPT_URL+'?action=getAll');
-    const data=await res.json();
-    if(data.success){
-      if(data.projects?.length)S.projects=data.projects;
-      if(data.users?.length)S.users=data.users;
-      mergeDefaults();
-      localStorage.setItem('pdb9',JSON.stringify({users:S.users,projects:S.projects}));
-      if(S.user){
-        if(S.proj)S.proj=S.projects.find(x=>x.id===S.proj.id)||S.proj;
-        renderHome();
-        if(S.proj&&!document.getElementById('detailView').classList.contains('hidden'))renderDetail();
-      }
-    }
-  }catch(e){console.warn('Sheets load failed, using localStorage',e);}
+  const ok=await loadFromSheets();
+  if(!ok){
+    console.warn('[Init] טעינה מ-Sheets נכשלה — עובד עם נתוני localStorage בלבד');
+  }
+  if(S.user){
+    if(S.proj)S.proj=S.projects.find(x=>x.id===S.proj.id)||S.proj;
+    renderHome();
+    if(S.proj&&!document.getElementById('detailView').classList.contains('hidden'))renderDetail();
+  }
 }
 init();
 </script>
