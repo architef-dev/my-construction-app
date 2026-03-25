@@ -432,8 +432,12 @@ const S={user:null,proj:null,uploadType:null,pendingRows:null,
 // ─── persistence ────────────────────────────────────────────────────────────
 function saveLS(){
   localStorage.setItem('pdb9',JSON.stringify({users:S.users,projects:S.projects}));
-  fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'saveProjects',projects:S.projects})}).catch(()=>{});
-  fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({action:'saveUsers',users:S.users})}).catch(()=>{});
+  const projData=encodeURIComponent(JSON.stringify(S.projects));
+  const userData=encodeURIComponent(JSON.stringify(S.users));
+  fetch(SCRIPT_URL+'?action=saveProjects&data='+projData,{method:'GET',mode:'cors'})
+    .catch(e=>console.error('saveProjects failed:',e));
+  fetch(SCRIPT_URL+'?action=saveUsers&data='+userData,{method:'GET',mode:'cors'})
+    .catch(e=>console.error('saveUsers failed:',e));
 }
 function mergeDefaults(){
   DEF_PROJECTS.forEach(def=>{
