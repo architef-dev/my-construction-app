@@ -1,3 +1,5 @@
 /*
-  Content-Security-Policy: frame-ancestors 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com;
-*/
+  Content-Security-Policy: frame-ancestors 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
